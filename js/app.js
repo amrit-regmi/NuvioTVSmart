@@ -12,6 +12,7 @@ import { ProfileManager } from "./core/profile/profileManager.js";
 import { MemberAccessRepository } from "./data/remote/supabase/memberAccessRepository.js";
 import { ProfileSyncService } from "./core/profile/profileSyncService.js";
 import { StartupSyncService } from "./core/profile/startupSyncService.js";
+import { FeatureAvailabilityManager } from "./core/feature/featureAvailabilityManager.js";
 import { ProviderCredentialSyncService } from "./core/profile/providerCredentialSyncService.js";
 import { ThemeManager } from "./ui/theme/themeManager.js";
 import { renderAppShell } from "./bootstrap/renderAppShell.js";
@@ -263,6 +264,9 @@ async function enterWithLastProfile({ restoreWebOsRoute = false } = {}) {
   if (activeProfile) {
     await ProfileManager.setActiveProfile(activeProfile.id);
     StartupSyncService.enableProfileScopedSync();
+    void FeatureAvailabilityManager.refresh().catch((error) => {
+      console.warn("Feature availability refresh failed", error);
+    });
     detailWatchedEnrichmentService.invalidateAllCache();
     await I18n.init();
     const memberAccess = MemberAccessRepository.getCachedAccess();

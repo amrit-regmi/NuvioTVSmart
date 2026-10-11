@@ -2,6 +2,7 @@ import { safeApiCall } from "../../core/network/safeApiCall.js";
 import { LocalStore } from "../../core/storage/localStore.js";
 import { ProfileManager } from "../../core/profile/profileManager.js";
 import { AddonApi } from "../remote/api/addonApi.js";
+import { catalogAddonUrl } from "../../core/reco/recoBackend.js";
 
 const ADDON_URLS_KEY = "installedAddonUrls";
 const ADDON_DISPLAY_NAMES_KEY = "installedAddonDisplayNames";
@@ -9,7 +10,13 @@ const ADDON_ENABLED_STATES_KEY = "installedAddonEnabledStates";
 const PROFILES_KEY = "profiles";
 const PROFILE_SCOPED_VERSION = 1;
 const MANIFEST_SUFFIX = "/manifest.json";
-const DEFAULT_ADDON_URLS = ["https://v3-cinemeta.strem.io", "https://opensubtitles-v3.strem.io"];
+// CineX: our own private backend's built-in catalog-addon replaces the stock
+// cinemeta/opensubtitles-v3 defaults — mirrors Android (NuvioTV)'s AddonRepositoryImpl,
+// which prepends RecoBackend.catalogAddonUrl for every signed-in user in private mode.
+// Seeded only on a fresh profile with no stored addon list yet (see getInstalledAddonUrls
+// below) — this app doesn't have Android's "always reinject" mechanism, so the default
+// list is what a new profile starts with instead.
+const DEFAULT_ADDON_URLS = catalogAddonUrl ? [catalogAddonUrl] : [];
 const MANIFEST_CACHE_KEY = "addonManifestCacheV2";
 const MANIFEST_CACHE_VERSION = 2;
 const MANIFEST_CACHE_TTL_MS = 6 * 60 * 60 * 1000;

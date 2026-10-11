@@ -9,6 +9,9 @@ export const TV_LOGIN_WEB_BASE_URL = String(
 export const DEVICE_LOGIN_WEB_BASE_URL = String(
   runtimeEnv.DEVICE_LOGIN_WEB_BASE_URL || "https://nuvio.tv/link"
 ).trim();
+// Private backend (taste-engine) base URL — same property name/value as Android's
+// RECO_API_BASE_URL / Mobile's FASTAPI_BASE_URL. See js/core/reco/recoBackend.js.
+export const RECO_API_BASE_URL = String(runtimeEnv.RECO_API_BASE_URL || "").trim();
 export const YOUTUBE_PROXY_URL = String(
   runtimeEnv.YOUTUBE_PROXY_URL || "youtube-proxy.html"
 ).trim();
