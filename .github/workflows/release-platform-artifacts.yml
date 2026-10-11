@@ -198,13 +198,13 @@ jobs:
         env:
           TAG_NAME: ${{ needs.resolve-release-payload.outputs.tag }}
         run: |
-          set -- NuvioTV001_*.wgt
+          set -- CineX00001_*.wgt
           if [ ! -e "$1" ]; then
             echo "Expected Tizen package was not created" >&2
             exit 1
           fi
           PACKAGE_FILE="$1"
-          TARGET_FILE="NuvioTV-Tizen-${TAG_NAME}.wgt"
+          TARGET_FILE="CineX-Tizen-${TAG_NAME}.wgt"
           mv "$PACKAGE_FILE" "$TARGET_FILE"
           SHA256=$(shasum -a 256 "$TARGET_FILE" | cut -d' ' -f1)
           SIZE=$(wc -c < "$TARGET_FILE" | tr -d ' ')
