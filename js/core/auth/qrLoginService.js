@@ -1,5 +1,4 @@
 import { Environment } from "../../platform/environment.js";
-import { Platform } from "../../platform/index.js";
 import { SessionStore } from "../storage/sessionStore.js";
 import { AuthManager } from "./authManager.js";
 import { AuthState } from "./authState.js";
@@ -244,62 +243,14 @@ async function ensureQrSessionAuthenticated({
     SessionStore.isAnonymousSession = false;
   }
 
-  const publishableKey = ServerConfigurationStore.getActive()?.publishableKey || "";
-  const commonHeaders = {
-    "Content-Type": "application/json",
-    apikey: publishableKey,
-    Authorization: `Bearer ${publishableKey}`
-  };
-
-  const tryAnonymousSignup = async () => {
-    const response = await fetchSupabaseAuth("/auth/v1/signup", {
-      method: "POST",
-      headers: commonHeaders,
-      body: JSON.stringify({
-        data: { tv_client: Platform.getName() }
-      }),
-      signal: AuthManager.getSessionSignal()
-    });
-    const text = await response.text();
-    if (!response.ok) {
-      throw new Error(text || `HTTP ${response.status}`);
-    }
-    return text ? JSON.parse(text) : {};
-  };
-
-  const tryAnonymousToken = async () => {
-    const response = await fetchSupabaseAuth("/auth/v1/token?grant_type=anonymous", {
-      method: "POST",
-      headers: commonHeaders,
-      body: JSON.stringify({}),
-      signal: AuthManager.getSessionSignal()
-    });
-    const text = await response.text();
-    if (!response.ok) {
-      throw new Error(text || `HTTP ${response.status}`);
-    }
-    return text ? JSON.parse(text) : {};
-  };
-
-  let payload;
-  try {
-    payload = await tryAnonymousSignup();
-  } catch (firstError) {
-    payload = await tryAnonymousToken().catch((secondError) => {
-      throw new Error(
-        `${firstError?.message || "anonymous signup failed"} | ${secondError?.message || "anonymous token failed"}`
-      );
-    });
-  }
-
-  const tokens = extractSessionTokens(payload);
-  if (!tokens) {
-    throw new Error("Anonymous auth did not return session tokens");
-  }
-
-  SessionStore.accessToken = tokens.accessToken;
-  SessionStore.refreshToken = tokens.refreshToken;
-  SessionStore.isAnonymousSession = true;
+  // CineX: unlike the stock Nuvio cloud project, our self-hosted Supabase instance does not
+  // have anonymous sign-ins enabled, so the signup/anonymous-token bootstrap this function
+  // used to attempt here always failed with a 422. It also isn't needed: start_tv_login_session
+  // / poll_tv_login_session / tv-logins-exchange all accept just the publishable (anon) key —
+  // no caller session required — exactly like Android's AuthManager.ensureQrSessionAuthenticated,
+  // which is a no-op stub for the same reason ("TV is unauthenticated, that's why we're
+  // exchanging... anon key is sufficient"). getBearerToken() already falls back to the
+  // publishable key when there is no session, so simply not bootstrapping one here is correct.
   assertSessionGeneration(expectedGeneration);
   return true;
 }
