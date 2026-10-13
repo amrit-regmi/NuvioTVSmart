@@ -50,6 +50,12 @@ export { TmdbSettingsStore } from "../../../data/local/tmdbSettingsStore.js";
 
 export { metaRepository } from "../../../data/repository/metaRepository.js";
 
+export { RecommendationRepository } from "../../../core/reco/recommendationRepository.js";
+
+export { catalogAddonUrl } from "../../../core/reco/recoBackend.js";
+
+export { FeatureAvailabilityManager, FeatureKeys } from "../../../core/feature/featureAvailabilityManager.js";
+
 export { mdbListRepository } from "../../../data/repository/mdbListRepository.js";
 
 export { ProfileManager } from "../../../core/profile/profileManager.js";

@@ -30,7 +30,11 @@ export function createHomeScreenMethods21() {
     uniqueById,
     getContinueWatchingNextUpSeedOptions,
     buildSidebarProfileSignature,
-    buildHeroIdentity
+    buildHeroIdentity,
+    RecommendationRepository,
+    FeatureAvailabilityManager,
+    FeatureKeys,
+    catalogAddonUrl
   } = internals;
 
   return {
@@ -87,6 +91,17 @@ export function createHomeScreenMethods21() {
       // slow addon or Trakt call never blocks catalog rows. The section paints
       // from the cached snapshot when available, or raw progress before enrichment.
 
+      // Fired alongside the addon manifest fetch so the "For You" row never blocks
+      // first paint; merged into this.rows once it resolves, below. Mirrors Android's
+      // reactive reco row, which also arrives independently of the catalog provider.
+      const recoRowsPromise =
+        FeatureAvailabilityManager.isAvailable(FeatureKeys.PERSONALIZATION) && prefs.useRecommendations !== false
+          ? RecommendationRepository.fetchHomeRows().catch((error) => {
+              console.warn("Recommendation rows load failed", error);
+              return [];
+            })
+          : Promise.resolve([]);
+
       const addons = refreshManifests
         ? await addonRepository.getInstalledAddons({
             staleWhileRevalidate: true,
@@ -95,8 +110,17 @@ export function createHomeScreenMethods21() {
         : await addonRepository.getInstalledAddons({ cacheOnly: true });
       this.collections = CollectionsStore.get();
       const catalogDescriptors = [];
+      // Master toggle: hide built-in catalog rows from Home while keeping the addon
+      // installed (its stream/subtitle resources must keep working regardless).
+      // Mirrors Android's HomeViewModelCatalogUtils rowOrder filter on kind=="builtin".
+      const hideBuiltinCatalogRows = prefs.useBuiltinCatalog === false && Boolean(catalogAddonUrl);
+      const isBuiltinCatalogAddon = (addon) =>
+        Boolean(catalogAddonUrl) && addonRepository.normalizeUrl(addon.baseUrl) === addonRepository.normalizeUrl(catalogAddonUrl);
 
       addons.forEach((addon) => {
+        if (hideBuiltinCatalogRows && isBuiltinCatalogAddon(addon)) {
+          return;
+        }
         addon.catalogs
           .filter((catalog) => catalogShouldShowOnHome(catalog))
           .forEach((catalog) => {
@@ -336,6 +360,23 @@ export function createHomeScreenMethods21() {
             console.warn("Deferred home rows load failed", error);
           });
       }
+
+      recoRowsPromise.then((recoRows) => {
+        if (!recoRows.length) {
+          return;
+        }
+        if (token !== this.homeLoadToken || Router.getCurrent() !== "home") {
+          return;
+        }
+        const combinedByKey = new Map((this.rows || []).map((entry) => [entry.homeCatalogKey, entry]));
+        recoRows.forEach((row) => combinedByKey.set(row.homeCatalogKey, row));
+        this.rows = this.sortAndFilterRows(Array.from(combinedByKey.values()), this.collections);
+        this.heroCandidates = uniqueById(this.collectHeroCandidates(this.rows));
+        if (!this.heroItem) {
+          this.heroItem = this.pickInitialHero();
+        }
+        this.requestBackgroundRender();
+      });
 
       if (this.layoutMode !== "modern") {
         this.enrichHero(this.heroCandidates[0] || null)
