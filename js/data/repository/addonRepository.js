@@ -3,6 +3,7 @@ import { LocalStore } from "../../core/storage/localStore.js";
 import { ProfileManager } from "../../core/profile/profileManager.js";
 import { AddonApi } from "../remote/api/addonApi.js";
 import { catalogAddonUrl } from "../../core/reco/recoBackend.js";
+import { AuthManager } from "../../core/auth/authManager.js";
 
 const ADDON_URLS_KEY = "installedAddonUrls";
 const ADDON_DISPLAY_NAMES_KEY = "installedAddonDisplayNames";
@@ -10,13 +11,12 @@ const ADDON_ENABLED_STATES_KEY = "installedAddonEnabledStates";
 const PROFILES_KEY = "profiles";
 const PROFILE_SCOPED_VERSION = 1;
 const MANIFEST_SUFFIX = "/manifest.json";
-// CineX: our own private backend's built-in catalog-addon replaces the stock
-// cinemeta/opensubtitles-v3 defaults — mirrors Android (NuvioTV)'s AddonRepositoryImpl,
-// which prepends RecoBackend.catalogAddonUrl for every signed-in user in private mode.
-// Seeded only on a fresh profile with no stored addon list yet (see getInstalledAddonUrls
-// below) — this app doesn't have Android's "always reinject" mechanism, so the default
-// list is what a new profile starts with instead.
-const DEFAULT_ADDON_URLS = catalogAddonUrl ? [catalogAddonUrl] : [];
+// CineX: empty, matching Android — it has no pre-seeded public addons either. The
+// built-in catalog-addon is injected further down in getInstalledAddons() instead of
+// seeded here; see the comment there for why (this list is synced to/from a shared
+// Supabase `addons` table, and the sync's own empty-snapshot verification correctly
+// wipes anything seeded here back out for an account with zero real stored addons).
+const DEFAULT_ADDON_URLS = [];
 const MANIFEST_CACHE_KEY = "addonManifestCacheV2";
 const MANIFEST_CACHE_VERSION = 2;
 const MANIFEST_CACHE_TTL_MS = 6 * 60 * 60 * 1000;
@@ -396,6 +396,27 @@ class AddonRepository {
     );
   }
 
+  /**
+   * Prepends our built-in catalog-addon to `urls`, purely in-memory — mirrors Android's
+   * AddonRepositoryImpl.getInstalledAddons(), which injects RecoBackend.catalogAddonUrl
+   * inside its reactive Flow transform, strictly downstream of the persisted/synced addon
+   * list. Deliberately NOT done in getInstalledAddonUrls() (which backs BOTH the synced
+   * `addons` table push in librarySyncService.js AND the addon-management settings UI) —
+   * injecting there would push this URL into the shared Supabase table as if it were a
+   * real user-managed addon, polluting cross-device sync and showing up on Android's own
+   * addon list too. This helper is the single call site that composes the EFFECTIVE addon
+   * list actually used for manifest fetching / catalog+stream+subtitle resources.
+   */
+  withBuiltinCatalogAddon(urls) {
+    if (!catalogAddonUrl || !AuthManager.isAuthenticated) {
+      return urls;
+    }
+    const alreadyPresent = (urls || []).some(
+      (url) => this.normalizeUrl(url) === this.normalizeUrl(catalogAddonUrl)
+    );
+    return alreadyPresent ? urls : [catalogAddonUrl, ...(urls || [])];
+  }
+
   getAddonEnabledStates() {
     return this.readProfileScopedValue(
       ADDON_ENABLED_STATES_KEY,
@@ -651,7 +672,7 @@ class AddonRepository {
 
   async getInstalledAddons(options = {}) {
     const includeDisabled = Boolean(options?.includeDisabled);
-    const allUrls = this.getInstalledAddonUrls();
+    const allUrls = this.withBuiltinCatalogAddon(this.getInstalledAddonUrls());
     const enabledStates = this.getAddonEnabledStates();
     const urls = includeDisabled ? allUrls : allUrls.filter((url) => this.isAddonEnabled(url));
     const cacheKey = JSON.stringify({
