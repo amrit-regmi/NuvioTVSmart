@@ -36,6 +36,8 @@ export {
   PUSH_DEBOUNCE_MS,
   HIDE_UNRELEASED_CONTENT_KEY,
   HIDE_CATALOG_UNDERLINE_KEY,
+  USE_BUILTIN_CATALOG_KEY,
+  USE_RECOMMENDATIONS_KEY,
   PENDING_PUSH_TOKENS_KEY,
   cachedSharedSettings,
   resolveProfileId,
@@ -72,6 +74,8 @@ const HOME_CATALOG_SHARED_SYNC_PLATFORM = "home_catalog_shared";
 const PUSH_DEBOUNCE_MS = 500;
 const HIDE_UNRELEASED_CONTENT_KEY = "hide_unreleased_content";
 const HIDE_CATALOG_UNDERLINE_KEY = "hide_catalog_underline";
+const USE_BUILTIN_CATALOG_KEY = "useBuiltinCatalog";
+const USE_RECOMMENDATIONS_KEY = "useRecommendations";
 const PENDING_PUSH_TOKENS_KEY = "homeCatalogSettingsPendingPushTokens";
 let cachedSharedSettings = null;
 
@@ -331,10 +335,20 @@ function buildLocalPayload(profileId = null, remotePayload = null) {
   });
 }
 
+function readTriBoolean(settingsJson = {}, key) {
+  if (!Object.prototype.hasOwnProperty.call(settingsJson, key) || settingsJson[key] == null) {
+    return undefined;
+  }
+  return Boolean(settingsJson[key]);
+}
+
 function decodePayload(settingsJson = {}, localPayload = {}) {
   if (!isPlainObject(settingsJson)) {
     return null;
   }
+
+  const useBuiltinCatalog = readTriBoolean(settingsJson, USE_BUILTIN_CATALOG_KEY);
+  const useRecommendations = readTriBoolean(settingsJson, USE_RECOMMENDATIONS_KEY);
 
   const rawItems = Array.isArray(settingsJson.items) ? settingsJson.items : null;
   if (rawItems) {
@@ -345,6 +359,8 @@ function decodePayload(settingsJson = {}, localPayload = {}) {
       hide_catalog_underline: Object.prototype.hasOwnProperty.call(settingsJson, HIDE_CATALOG_UNDERLINE_KEY)
         ? Boolean(settingsJson.hide_catalog_underline)
         : undefined,
+      useBuiltinCatalog,
+      useRecommendations,
       items: rawItems
         .map((item, index) => normalizeSyncItem(item, index))
         .filter(itemHasIdentity)
@@ -368,6 +384,8 @@ function decodePayload(settingsJson = {}, localPayload = {}) {
   if (!order && !disabled) {
     return {
       hide_unreleased_content: Boolean(localPayload.hide_unreleased_content),
+      useBuiltinCatalog,
+      useRecommendations,
       items: []
     };
   }
@@ -386,6 +404,8 @@ function decodePayload(settingsJson = {}, localPayload = {}) {
     hide_unreleased_content: Object.prototype.hasOwnProperty.call(settingsJson, HIDE_UNRELEASED_CONTENT_KEY)
       ? Boolean(settingsJson.hide_unreleased_content)
       : Boolean(localPayload.hide_unreleased_content),
+    useBuiltinCatalog,
+    useRecommendations,
     items: mergedKeys
       .map((key, index) => {
         const item = cloneValue(localByKey.get(key));
@@ -493,6 +513,16 @@ function applyPayload(profileId, payload = {}, effectivePayload = payload) {
         { hideUnreleasedContent: Boolean(payload.hide_unreleased_content) },
         { silentSync: true }
       );
+    }
+    const visibilityPartial = {};
+    if (payload.useBuiltinCatalog !== undefined) {
+      visibilityPartial.useBuiltinCatalog = payload.useBuiltinCatalog;
+    }
+    if (payload.useRecommendations !== undefined) {
+      visibilityPartial.useRecommendations = payload.useRecommendations;
+    }
+    if (Object.keys(visibilityPartial).length) {
+      LayoutPreferences.setForProfile(profileId, visibilityPartial, { silentSync: true });
     }
   } finally {
     HomeCatalogSettingsSyncService.syncingFromRemoteProfiles.delete(resolveProfileId(profileId));
