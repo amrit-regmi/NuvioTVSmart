@@ -446,9 +446,18 @@ export const QrLoginService = {
       }
 
       const result = await response.json();
-      const tokens = extractSessionTokens(result) || {
-        accessToken: result?.access_token || null,
-        refreshToken: result?.refresh_token || null
+      // /functions/v1/tv-logins-exchange is an nginx rewrite straight to PostgREST's
+      // /rpc/exchange_tv_login_session (see docker/supabase/volumes/nginx/nginx.conf on the
+      // backend) -- like every other PostgREST RPC call in this file (poll_tv_login_session,
+      // start_tv_login_session), the response is a JSON ARRAY with one row, not a bare object.
+      // Android already unwraps this the same way (.decodeList<...>().firstOrNull()); this file's
+      // own poll() does too (`data?.[0] || {}`) -- exchange() was the one place that read fields
+      // directly off the array itself, which is always empty, hence "missing session tokens"
+      // on every real (approved) exchange even though the call itself succeeded.
+      const row = Array.isArray(result) ? result[0] : result;
+      const tokens = extractSessionTokens(row) || {
+        accessToken: row?.access_token || null,
+        refreshToken: row?.refresh_token || null
       };
       if (!tokens?.accessToken || !tokens?.refreshToken) {
         lastError = "QR exchange missing session tokens";
@@ -462,7 +471,7 @@ export const QrLoginService = {
       loginTrace("qr exchange session ready");
       AuthManager.setState(AuthState.AUTHENTICATED);
       loginTrace("qr exchange authenticated");
-      return result;
+      return true;
     } catch (error) {
       lastError = String(error?.message || "QR exchange failed");
       loginTrace("qr exchange failed", { name: error?.name || "Error" });
