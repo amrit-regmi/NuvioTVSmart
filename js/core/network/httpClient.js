@@ -2,6 +2,7 @@ import { SessionStore } from "../storage/sessionStore.js";
 import { AuthManager } from "../auth/authManager.js";
 import { fetchViaWebOsSupabaseProxy } from "../../platform/webos/webosSupabaseProxy.js";
 import { withRequestTimeout } from "./requestTimeout.js";
+import { host as recoBackendHost } from "../reco/recoBackend.js";
 
 const DEFAULT_HTTP_REQUEST_TIMEOUT_MS = 60_000;
 const BACKEND_RETRY_MAX_DELAY_MS = 30_000;
@@ -20,6 +21,27 @@ let backendCooldownUntilMs = 0;
 
 function isSupabaseBackendRequest(url) {
   return /\/(?:rest\/v1|storage\/v1)\//i.test(String(url || ""));
+}
+
+function hostOf(url) {
+  try {
+    return new URL(String(url || "")).host;
+  } catch {
+    return "";
+  }
+}
+
+/**
+ * Mirrors Android's RecoAuthInterceptor: our own catalog-addon (mounted on the reco
+ * backend host) requires the Nuvio user Bearer token in private mode on every data
+ * route (catalog/meta/stream/subtitles) — only its manifest.json stays public. Callers
+ * (CatalogApi/AddonApi) pass includeSessionAuth: false to avoid leaking our token to
+ * arbitrary third-party addon hosts; this override re-enables it ONLY when the request
+ * target is our own reco backend, leaving every other host's includeSessionAuth: false
+ * untouched.
+ */
+function isRecoBackendRequest(url) {
+  return Boolean(recoBackendHost) && hostOf(url).toLowerCase() === recoBackendHost.toLowerCase();
 }
 
 function isSafeBackendRetryRequest(url, method) {
@@ -182,7 +204,7 @@ function combineAbortSignals(...signals) {
 
 export async function httpRequest(url, options = {}) {
   const method = String(options.method || "GET").toUpperCase();
-  const includeSessionAuth = options.includeSessionAuth !== false;
+  const includeSessionAuth = options.includeSessionAuth !== false || isRecoBackendRequest(url);
   let refreshFailedTransiently = false;
 
   const headers = toHeaderObject(options.headers);
