@@ -18,7 +18,7 @@ export function createDebridStreamPresentationMethods01() {
 
   return {
     apply(groups = [], settings = DebridSettingsStore.get()) {
-      if (!settings.enabled || !DebridProviders.preferredResolverService(settings)) {
+      if (!DebridProviders.isEffectivelyEnabled(settings) || !DebridProviders.preferredResolverService(settings)) {
         return groups;
       }
       const effective = effectiveSettings(settings);

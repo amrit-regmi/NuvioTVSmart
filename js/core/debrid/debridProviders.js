@@ -1,3 +1,6 @@
+import { AuthManager } from "../auth/authManager.js";
+import { SharedTorboxKeyService } from "./sharedTorboxKeyService.js";
+
 export const DEBRID_PROVIDER_IDS = {
   TORBOX: "torbox",
   PREMIUMIZE: "premiumize",
@@ -119,7 +122,34 @@ export const DebridProviders = {
     if (!provider) {
       return "";
     }
-    return String(settings?.[provider.apiKeyField] || "").trim();
+    const ownKey = String(settings?.[provider.apiKeyField] || "").trim();
+    if (ownKey) {
+      return ownKey;
+    }
+    // CineX: our own backend always offers a shared TorBox key to authenticated
+    // accounts (mirrors Android's SharedTorboxKeyService) — no BYO key required.
+    if (provider.id === DEBRID_PROVIDER_IDS.TORBOX && AuthManager.isAuthenticated) {
+      return SharedTorboxKeyService.getCachedKeySync() || "";
+    }
+    return "";
+  },
+
+  /**
+   * True when TorBox resolution would use OUR backend's shared key (not a user's
+   * own key). Callers use this to bypass the "debrid providers enabled" master
+   * toggle for the built-in path, while leaving it enforced for BYO providers.
+   */
+  isTorboxSharedKeyActive(settings = {}) {
+    const provider = this.byId(DEBRID_PROVIDER_IDS.TORBOX);
+    const ownKey = String(settings?.[provider.apiKeyField] || "").trim();
+    return (
+      !ownKey && AuthManager.isAuthenticated && Boolean(SharedTorboxKeyService.getCachedKeySync())
+    );
+  },
+
+  /** `settings.enabled` OR the built-in shared-key path is active. */
+  isEffectivelyEnabled(settings = {}) {
+    return Boolean(settings.enabled) || this.isTorboxSharedKeyActive(settings);
   },
 
   configuredServices(settings = {}) {

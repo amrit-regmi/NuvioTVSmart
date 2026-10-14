@@ -1,6 +1,7 @@
 import { DebridSettingsStore } from "../../data/local/debridSettingsStore.js";
 import { selectAutoPlayStream, STREAM_AUTO_PLAY_MODE } from "../streams/streamAutoPlaySelector.js";
 import { DirectDebridResolver } from "./directDebridResolver.js";
+import { DebridProviders } from "./debridProviders.js";
 
 const MAX_BACKGROUND_PREPARES_PER_MINUTE = 6;
 const MAX_BACKGROUND_PREPARES_PER_HOUR = 30;
@@ -169,7 +170,7 @@ export const DirectDebridStreamPreparer = {
       0,
       Math.min(5, Math.trunc(Number(settings.instantPlaybackPreparationLimit || 0)))
     );
-    if (!settings.enabled || limit <= 0) {
+    if (!DebridProviders.isEffectivelyEnabled(settings) || limit <= 0) {
       return;
     }
     const candidates = prioritizeDirectDebridCandidates(streams, {

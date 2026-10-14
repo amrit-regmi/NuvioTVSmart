@@ -1,6 +1,7 @@
 import { DebridSettingsStore } from "../../data/local/debridSettingsStore.js";
 import { DebridApi } from "../../data/remote/api/debridApi.js";
 import { DEBRID_CAPABILITIES, DEBRID_PROVIDER_IDS, DebridProviders } from "./debridProviders.js";
+import { SharedTorboxKeyService } from "./sharedTorboxKeyService.js";
 import {
   getDebridFileDisplayName,
   getDebridFileSize,
@@ -388,7 +389,7 @@ function withResolvedUrl(stream = {}, result) {
 export const DirectDebridResolver = {
   canResolveStream(stream = {}, { season = null, episode = null } = {}) {
     const settings = DebridSettingsStore.get();
-    if (!settings.enabled) {
+    if (!DebridProviders.isEffectivelyEnabled(settings)) {
       return false;
     }
     const resolve = getResolve(stream, season, episode, settings);
@@ -430,7 +431,7 @@ export const DirectDebridResolver = {
       return { status: "success", stream };
     }
     const settings = DebridSettingsStore.get();
-    if (!settings.enabled) {
+    if (!DebridProviders.isEffectivelyEnabled(settings)) {
       return failure("disabled");
     }
     const resolve = getResolve(stream, season, episode, settings);
@@ -438,7 +439,16 @@ export const DirectDebridResolver = {
       return failure("stale");
     }
     const provider = DebridProviders.byId(resolve.service);
-    const apiKey = DebridProviders.apiKeyFor(settings, provider?.id);
+    let apiKey = DebridProviders.apiKeyFor(settings, provider?.id);
+    if (
+      !apiKey &&
+      provider?.id === DEBRID_PROVIDER_IDS.TORBOX &&
+      !String(settings?.torboxApiKey || "").trim()
+    ) {
+      // Synchronous cache missed (first resolve after launch/login) — fetch the
+      // shared key live rather than failing a resolve that would otherwise succeed.
+      apiKey = (await SharedTorboxKeyService.getKey()) || "";
+    }
     if (!provider || !apiKey) {
       return failure("missing_api_key");
     }

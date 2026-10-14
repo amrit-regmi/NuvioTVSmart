@@ -13,6 +13,7 @@ import { MemberAccessRepository } from "./data/remote/supabase/memberAccessRepos
 import { ProfileSyncService } from "./core/profile/profileSyncService.js";
 import { StartupSyncService } from "./core/profile/startupSyncService.js";
 import { FeatureAvailabilityManager } from "./core/feature/featureAvailabilityManager.js";
+import { SharedTorboxKeyService } from "./core/debrid/sharedTorboxKeyService.js";
 import { ProviderCredentialSyncService } from "./core/profile/providerCredentialSyncService.js";
 import { ThemeManager } from "./ui/theme/themeManager.js";
 import { renderAppShell } from "./bootstrap/renderAppShell.js";
@@ -266,6 +267,9 @@ async function enterWithLastProfile({ restoreWebOsRoute = false } = {}) {
     StartupSyncService.enableProfileScopedSync();
     void FeatureAvailabilityManager.refresh().catch((error) => {
       console.warn("Feature availability refresh failed", error);
+    });
+    void SharedTorboxKeyService.getKey().catch((error) => {
+      console.warn("Shared TorBox key refresh failed", error);
     });
     detailWatchedEnrichmentService.invalidateAllCache();
     await I18n.init();
